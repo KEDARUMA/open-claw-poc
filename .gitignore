@@ -1,0 +1,39 @@
+# OpenClaw実行環境、設定、キャッシュ、履歴は管理しない。
+/.openclaw-runtime/
+/.openclaw/*
+!/.openclaw/workspaces/
+/.openclaw/workspaces/*
+
+# Codexが実際に読む共通・社員別指示だけ管理する。
+!/.openclaw/workspaces/AGENTS.md
+!/.openclaw/workspaces/main/
+!/.openclaw/workspaces/architect/
+!/.openclaw/workspaces/designer/
+!/.openclaw/workspaces/engineer/
+!/.openclaw/workspaces/reviewer/
+!/.openclaw/workspaces/qa/
+/.openclaw/workspaces/main/*
+!/.openclaw/workspaces/main/AGENTS.md
+!/.openclaw/workspaces/main/SOUL.md
+/.openclaw/workspaces/architect/*
+!/.openclaw/workspaces/architect/AGENTS.md
+!/.openclaw/workspaces/architect/SOUL.md
+/.openclaw/workspaces/designer/*
+!/.openclaw/workspaces/designer/AGENTS.md
+!/.openclaw/workspaces/designer/SOUL.md
+/.openclaw/workspaces/engineer/*
+!/.openclaw/workspaces/engineer/AGENTS.md
+!/.openclaw/workspaces/engineer/SOUL.md
+/.openclaw/workspaces/reviewer/*
+!/.openclaw/workspaces/reviewer/AGENTS.md
+!/.openclaw/workspaces/reviewer/SOUL.md
+/.openclaw/workspaces/qa/*
+!/.openclaw/workspaces/qa/AGENTS.md
+!/.openclaw/workspaces/qa/SOUL.md
+
+# Python実行時に生成されるファイルは管理しない。
+__pycache__/
+*.py[cod]
+
+# ローカル作業ログ（共有しない）
+/.作業ログ.md
