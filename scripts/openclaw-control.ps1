@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidateSet('start', 'stop', 'restart', 'cli')]
@@ -24,7 +24,7 @@ $workspacePath = Join-Path $stateRoot 'workspace'
 $logPath = Join-Path $runtimeTempPath 'openclaw-control.log'
 $gatewayPort = 18789
 $gatewayUrl = "http://127.0.0.1:$gatewayPort/"
-$startupTimeoutSeconds = 90
+$startupTimeoutSeconds = 300
 $shutdownTimeoutSeconds = 330
 
 # 操作日時、段階、結果をプロジェクト内ログへ記録する。
