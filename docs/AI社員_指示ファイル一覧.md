@@ -1,10 +1,10 @@
 # AI社員が使う指示ファイル
 
-2026-09-28時点で、OpenClawには6名の社員を登録している。各社員は設定された専用ワークスペースの `AGENTS.md` と `SOUL.md` を使う。
+2026-09-28時点で、OpenClawには6名のAI社員を登録している。各社員が作業する専用ディレクトリ（workspace）に、作業指示を定める `AGENTS.md` と、役割や話し方を定める `SOUL.md` を置いている。
 
 ## 社員ごとの配置
 
-| 社員 | agent ID | 使用するAGENTS.md | 使用するSOUL.md | SOULの正本 |
+| 社員 | 登録ID | 使用するAGENTS.md | 使用するSOUL.md | SOULの正本 |
 | --- | --- | --- | --- | --- |
 | マネージャー | `main` | `.openclaw/workspaces/main/AGENTS.md` | `.openclaw/workspaces/main/SOUL.md` | `ai-employees/employee-profiles/roles/manager/SOUL.md` |
 | ソフトウェア設計者 | `architect` | `.openclaw/workspaces/architect/AGENTS.md` | `.openclaw/workspaces/architect/SOUL.md` | `ai-employees/employee-profiles/roles/architect/SOUL.md` |
@@ -13,18 +13,18 @@
 | レビュワー | `reviewer` | `.openclaw/workspaces/reviewer/AGENTS.md` | `.openclaw/workspaces/reviewer/SOUL.md` | `ai-employees/employee-profiles/roles/reviewer/SOUL.md` |
 | QA | `qa` | `.openclaw/workspaces/qa/AGENTS.md` | `.openclaw/workspaces/qa/SOUL.md` | `ai-employees/employee-profiles/roles/qa/SOUL.md` |
 
-`SOUL.md` は各社員の役割・人格を定める。2026-09-28に確認し、6名のワークスペース側SOULは各役割SOULの正本と一致している。
+2026-09-28に確認し、6名のworkspaceにある `SOUL.md` は各役割SOULの正本と一致している。
 
-共通のCodex作業指示は、6つのワークスペースの親にある `.openclaw/workspaces/AGENTS.md` から適用する。各社員のワークスペースにも個別の `AGENTS.md` があり、そちらも使用される。共通の親ファイルと社員別ファイルは別々に保存され、自動同期されない。
+ターミナルからAIにコード作業を依頼するツール（Codex CLI）向けの共通作業指示は、6つのワークスペースの親にある `.openclaw/workspaces/AGENTS.md` から適用する。各社員のワークスペースにも個別の `AGENTS.md` があり、そちらも使用される。共通の親ファイルと社員別ファイルは別々に保存され、自動同期されない。
 
 `ai-employees/employee-profiles/common/AGENTS.md` は現在空であり、実際に適用される共通ルールの正本ではない。
 
 ## 読み込み範囲
 
-- OpenClawは各agentの `workspace` 設定に従い、その社員用ワークスペースを使う。現在の設定では6名それぞれに専用ディレクトリを指定している。
+- OpenClawは社員ごとの登録ID（agent ID）に対応する `workspace` 設定を読み、その社員用の作業ディレクトリを使う。現在の設定では6名それぞれに専用ディレクトリを指定している。
 - OpenClawはワークスペースの `AGENTS.md` を作業指示として、`SOUL.md` を役割・口調として各セッションで読み込む。
-- `agents.defaults.skipBootstrap=true` は指示ファイルの自動生成を止める設定である。すでに置かれている `AGENTS.md` と `SOUL.md` の読み込みは止めない。
-- Codex連携の `plugins.entries.codex.config.appServer.homeScope` は `agent` に設定している。ユーザー個人のCodexホームと社員のCodexホームを分ける。
+- OpenClaw標準の指示ファイルの自動生成を止める設定 `agents.defaults.skipBootstrap=true` を使っている。すでに置かれている `AGENTS.md` と `SOUL.md` の読み込みは止めない。
+- Codex連携の実行環境を社員ごとに分ける設定 `plugins.entries.codex.config.appServer.homeScope` は `agent` にしている。ユーザー個人のCodexホームと社員のCodexホームを分ける。
 - Codexは実行フォルダーまでのプロジェクト指示ファイルも読み込む。このプロジェクトのルート `AGENTS.md` は現在 `# AGENTS` だけの内容だが、6名のワークスペースの親ディレクトリにある。ここへ指示を書き足すと、Codexが社員共通の追加指示として読む可能性がある。
 - 既存の `.openclaw/workspace/AGENTS.md` は今回登録した6名の `workspace` には指定されていない。社員6名の指示ファイルとしては使われない。
 - OpenClaw本体や同梱ドキュメント、テスト用データにも `AGENTS.md` が存在する。この一覧は `agents.entries` に登録された社員6名のワークスペースを対象にしている。

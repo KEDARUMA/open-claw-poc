@@ -1,22 +1,24 @@
-# OpenClaw セットアップ手順（Codex 実行用）
+# OpenClaw セットアップ手順
 
 ## 目的と対象
 
-この文書は、Windows 11 の本プロジェクトに OpenClaw を導入し、Codex サブスクリプション認証、導入後のログ・動作確認、Gateway 起動、Control UI 表示までを行う手順です。
+OpenClawは、自分で管理する環境でAIアシスタントを動かし、チャットから仕事を頼める基盤です。チャット接続とAI社員の実行を担う常駐プロセスをGateway、状態確認や操作を行うブラウザー画面をControl UIと呼びます。
+
+ターミナルから指示文書に沿って作業を進めるツール（Codex CLI）を使い、Windows 11 の本プロジェクトに OpenClaw を導入します。Codex サブスクリプション認証、導入後のログ・動作確認、Gateway 起動、Control UI 表示までを扱います。
 
 - Ollama は導入・使用しません。
 - OpenClaw の Node.js、CLI、設定、状態、キャッシュ、実行ログは、このプロジェクト内に置きます。
-- OpenClaw 標準の Control UI を対象とします。AI社員専用 Control Plane は対象外です。
+- OpenClaw 標準の Control UI を対象とします。AI社員専用の状態管理・操作アプリはこの手順に含めません。
 - 既存の `.openclaw` 設定・認証・状態を削除、初期化、または上書きしません。
 - Windows のユーザープロファイル、グローバル PATH、グローバル Node.js / OpenClaw のインストール先は変更しません。
 - Codex または ChatGPT の認証操作が必要な場合は、そこで止めてユーザーに案内します。
 
 ## Codex からの一括実行
 
-PowerShell で次のコマンドを実行します。
+PowerShell でプロジェクトルート（このリポジトリを配置したディレクトリ）に移動してから、次のコマンドを実行します。
 
 ```powershell
-codex exec --approve-for-me --cd "D:\Workshop\open-claw-poc" "docs/openclaw-setup.md を最初から読み、この文書と AGENTS.md の指示に従ってセットアップを実行してください。認証など人の操作が必要なら、その地点で停止して操作方法を案内してください。"
+codex exec --approve-for-me --cd . "docs/openclaw-setup.md を最初から読み、この文書と AGENTS.md の指示に従ってセットアップを実行してください。認証など人の操作が必要なら、その地点で停止して操作方法を案内してください。"
 ```
 
 `--approve-for-me` は Codex CLI の自動レビュー付き実行モードです。プロジェクト外へ書き込む操作や、ここに記載していない破壊的操作を追加しないでください。
@@ -48,7 +50,7 @@ codex exec --approve-for-me --cd "D:\Workshop\open-claw-poc" "docs/openclaw-setu
 ### 1. 指示と対象を確認
 
 1. プロジェクトと Codex の `AGENTS.md`、`MACHINE-SPECIFIC.md` を読み、指示を守ります。
-2. 現在のプロジェクトルートを特定します。作業対象が `D:\Workshop\open-claw-poc` でなければ停止します。
+2. `git rev-parse --show-toplevel` でGitルートを特定し、そのルートに `docs/openclaw-setup.md` と `scripts/openclaw-control.ps1` があることを確認します。どちらかがない場合は停止します。
 3. `.openclaw` と `.openclaw-runtime` が既にある場合は内容を保持し、削除・初期化しません。
 4. Gateway の状態と 18789 番ポートを確認します。別プロセスがポートを使用している場合、プロセスを終了せず停止して報告します。
 

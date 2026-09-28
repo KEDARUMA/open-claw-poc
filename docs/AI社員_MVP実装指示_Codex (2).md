@@ -1,8 +1,10 @@
-# AI社員プラットフォーム MVP 実装指示書
+# AI社員プラットフォームの最小構成（MVP）実装指示書
 
 ## 0. この文書の目的
 
-この文書は、Codexが追加の設計相談なしにAI社員プラットフォームのMVP実装へ着手できる粒度まで、仕様・設計理由・実装順・受入条件を固定するためのもの。
+ターミナルからAIへ作業を依頼できるツール（Codex CLI）が、追加の設計相談なしにAI社員プラットフォームのMVP実装へ着手できるよう、仕様・設計理由・実装順・受入条件を固定する。
+
+本システムでは、ユーザーの依頼を個別に実行・確認できる作業単位（Task）へ分ける。各Taskの完了は、定めた要件（Baseline Requirements）に照らして判定する。社員が計画と作業を進め、別の社員がそれらを確認する。高・中の問題が見つかれば計画へ戻す。この進行管理がReview Loop Coreの基本動作だ。人間は管理APIと画面（Control Plane）で進捗を確認し、停止や差し戻しを行う。
 
 本プロジェクトの目的は、汎用マルチエージェントFWを作ることではない。
 
@@ -18,18 +20,19 @@ MVPでは以下を固定する。
 
 - OS: Windows 11
 - Runtime: Python 3.12
-- Agent Framework: AgentScope 2.x
+- AI社員の実行・観測基盤: AgentScope 2.x
 - AI実行: ローカルPC上のCodex CLI
 - Codex認証: 現在利用中のChatGPTサブスク認証
 - AI社員: Manager / Engineer / Reviewer / QA
-- 4 AgentすべてCodex CLIを利用する
-- Agentごとに独立したCodex sessionを持つ
-- 同じTask・同じAgentでは同一sessionをresumeして使い続ける
+- 各AI社員を、システム上で作業を受け持つ実行主体（Agent）として扱う
+- 4名全員がCodex CLIを利用する
+- 社員ごとに独立した会話履歴（Codex session）を持つ
+- 同じTaskで同じ社員が続けて作業するときは、同一sessionをresumeして使い続ける
 - 全AgentはMVPでは技術的にフルアクセス可能とする
 - 通常工程では人間の承認を待たず自走する
 - Review Loop Coreを開始するTaskには必ず `Baseline Requirements` を持たせる
-- HIGH / MEDIUMのレビュー指摘があればPLANからやり直す
-- 規定回数のやり直し、異常、上限超過時だけHUMAN_REQUIREDで停止する
+- 重要度が高・中のレビュー指摘があればPLANからやり直す
+- 規定回数のやり直し、異常、上限超過時だけ、ユーザー確認が必要な停止状態（HUMAN_REQUIRED）へ移る
 - AI実行層は抽象化し、将来CodexからローカルLLM等へ差し替え可能にする
 
 ### 理由
@@ -114,6 +117,8 @@ Mobile/AppiumはMVP対象外。
 
 # 3. 全体アーキテクチャ
 
+AI社員の実行、レビュー制御、人による確認・操作を分け、Taskや実行履歴を保存する。AIを呼び出す方式を交換できる層（AIBackend）と、情報を保存する領域（Store）を設ける。
+
 ```text
 Windows 11
 │
@@ -128,8 +133,8 @@ Windows 11
 ├─ Review Loop Core
 │
 ├─ AIBackend
-│   ├─ CodexBackend      ← MVPで使用
-│   └─ OtherBackend      ← 将来差し替え用
+│   ├─ Codex CLIとの接続（CodexBackend）       ← MVPで使用
+│   └─ 他のAI基盤との接続（OtherBackend）      ← 将来差し替え用
 │       ├─ Ollama / Qwen
 │       ├─ Ministral
 │       └─ その他

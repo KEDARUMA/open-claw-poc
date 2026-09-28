@@ -3,6 +3,7 @@
 /.openclaw/*
 !/.openclaw/workspaces/
 /.openclaw/workspaces/*
+!/.openclaw/workspaces/MACHINE-SPECIFIC.md
 
 # Codexが実際に読む共通・社員別指示だけ管理する。
 !/.openclaw/workspaces/AGENTS.md
