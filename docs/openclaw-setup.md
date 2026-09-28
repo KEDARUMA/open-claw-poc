@@ -27,14 +27,14 @@ codex exec --approve-for-me --cd . "docs/openclaw-setup.md を最初から読み
 
 2026-09-27 時点で、次の構成を確認しています。
 
-| 項目 | プロジェクト内の場所・値 |
-| --- | --- |
-| OpenClaw CLI | `.openclaw-runtime/cli` |
-| OpenClaw の版 | `2026.9.6` |
-| 専用 Node.js | `.openclaw-runtime/node`、`26.10.0` |
-| OpenClaw 状態・設定 | `.openclaw` |
-| OpenClaw CLI・Gateway制御 | `scripts/openclaw-control.ps1` |
-| Gateway / Control UI | `http://127.0.0.1:18789/` |
+| 項目                      | プロジェクト内の場所・値            |
+| ------------------------- | ----------------------------------- |
+| OpenClaw CLI              | `.openclaw-runtime/cli`             |
+| OpenClaw の版             | `2026.9.6`                          |
+| 専用 Node.js              | `.openclaw-runtime/node`、`26.10.0` |
+| OpenClaw 状態・設定       | `.openclaw`                         |
+| OpenClaw CLI・Gateway制御 | `scripts/openclaw-control.ps1`      |
+| Gateway / Control UI      | `http://127.0.0.1:18789/`           |
 
 `scripts/openclaw-control.ps1` は、OpenClaw CLI の実行環境と、設定・作業領域・Node.js・npm キャッシュ・一時ファイルの場所をプロジェクト内へ設定します。`start`、`stop`、`restart` で Gateway を制御し、`cli` の後に CLI コマンドを指定すると OpenClaw の各コマンドを実行します。`.gitignore` には `.openclaw` と `.openclaw-runtime` の除外パターンがあります。
 
@@ -150,41 +150,45 @@ if ($LASTEXITCODE -gt 2) { throw 'Codex 認証状態を確認できませんで�
 2. Gateway状態、Control UIのHTTP応答、OpenClaw実行ログを次のコマンドで確認します。Gateway statusの終了コードが0、HTTP応答が200、ログファイルが空でないことを成功条件とします。
 
    ```powershell
-  $projectRoot = (Get-Location).Path
-  $controlPath = Join-Path $projectRoot 'scripts/openclaw-control.ps1'
-  $logRoot = Join-Path $projectRoot '.openclaw-runtime/tmp/openclaw'
-  $runtimeLogRoot = Join-Path $projectRoot '.openclaw-runtime/tmp'
-  $deadline = [TimeSpan]::FromSeconds(60)
-  $watch = [System.Diagnostics.Stopwatch]::StartNew()
-  $ready = $false
-  while ($watch.Elapsed -lt $deadline) {
-      & $controlPath cli gateway status --require-rpc --timeout 2000 *> $null
-      $gatewayReady = $LASTEXITCODE -eq 0
-      $httpReady = $false
-      $remainingSeconds = [Math]::Floor(($deadline - $watch.Elapsed).TotalSeconds)
-      if ($remainingSeconds -gt 0) {
-          $timeoutSeconds = [Math]::Max(1, [Math]::Min(2, [int]$remainingSeconds))
-          try {
-              $response = Invoke-WebRequest -Uri 'http://127.0.0.1:18789/' -TimeoutSec $timeoutSeconds -ErrorAction Stop
-              $httpReady = $response.StatusCode -eq 200
-          } catch {
-              $httpReady = $false
-          }
-      }
-      if ($gatewayReady -and $httpReady) {
-          $ready = $true
-          break
-      }
-      $remainingMilliseconds = [Math]::Floor(($deadline - $watch.Elapsed).TotalMilliseconds)
-      if ($remainingMilliseconds -gt 0) { Start-Sleep -Milliseconds ([int][Math]::Min(1000, $remainingMilliseconds)) }
-  }
-  if (-not $ready) { throw "Gateway または Control UI が60秒以内に起動しませんでした。ログを確認してください: $runtimeLogRoot" }
-  $logFile = Get-ChildItem -LiteralPath $logRoot -Filter 'openclaw-*.log' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-  if (-not $logFile -or $logFile.Length -le 0) { throw "OpenClaw の実行ログがないか、空です: $logRoot" }
-  $logFile | Select-Object FullName,Length,LastWriteTime
+
    ```
 
-   新規起動時は `.openclaw-runtime/tmp/gateway-<起動時刻>.out.log` と `.err.log` も確認します。既存 Gateway を再利用する場合は再起動せず、既存ログの場所と更新時刻を記録します。起動エラーまたはタイムアウト時はログを調べて報告し、別ポートへ勝手に切り替えません。
+$projectRoot = (Get-Location).Path
+$controlPath = Join-Path $projectRoot 'scripts/openclaw-control.ps1'
+$logRoot = Join-Path $projectRoot '.openclaw-runtime/tmp/openclaw'
+$runtimeLogRoot = Join-Path $projectRoot '.openclaw-runtime/tmp'
+$deadline = [TimeSpan]::FromSeconds(60)
+$watch = [System.Diagnostics.Stopwatch]::StartNew()
+$ready = $false
+while ($watch.Elapsed -lt $deadline) {
+& $controlPath cli gateway status --require-rpc --timeout 2000 _> $null
+$gatewayReady = $LASTEXITCODE -eq 0
+$httpReady = $false
+$remainingSeconds = [Math]::Floor(($deadline - $watch.Elapsed).TotalSeconds)
+if ($remainingSeconds -gt 0) {
+$timeoutSeconds = [Math]::Max(1, [Math]::Min(2, [int]$remainingSeconds))
+try {
+$response = Invoke-WebRequest -Uri 'http://127.0.0.1:18789/' -TimeoutSec $timeoutSeconds -ErrorAction Stop
+$httpReady = $response.StatusCode -eq 200
+} catch {
+$httpReady = $false
+}
+}
+if ($gatewayReady -and $httpReady) {
+$ready = $true
+break
+}
+$remainingMilliseconds = [Math]::Floor(($deadline - $watch.Elapsed).TotalMilliseconds)
+if ($remainingMilliseconds -gt 0) { Start-Sleep -Milliseconds ([int][Math]::Min(1000, $remainingMilliseconds)) }
+}
+if (-not $ready) { throw "Gateway または Control UI が60秒以内に起動しませんでした。ログを確認してください: $runtimeLogRoot" }
+$logFile = Get-ChildItem -LiteralPath $logRoot -Filter 'openclaw-_.log' -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+if (-not $logFile -or $logFile.Length -le 0) { throw "OpenClaw の実行ログがないか、空です: $logRoot" }
+$logFile | Select-Object FullName,Length,LastWriteTime
+
+```
+
+新規起動時は `.openclaw-runtime/tmp/gateway-<起動時刻>.out.log` と `.err.log` も確認します。既存 Gateway を再利用する場合は再起動せず、既存ログの場所と更新時刻を記録します。起動エラーまたはタイムアウト時はログを調べて報告し、別ポートへ勝手に切り替えません。
 3. ブラウザー起動・接続は `$launch-browser-codex` の手順に従い、Chromium だけを使います。ブラウザー接続には CDP を直接使います。
 4. `scripts/openclaw-control.ps1 cli dashboard --json` の `browserUrl` を使って Control UI を開きます。このURLには短時間だけ有効な認証情報が含まれるため、コンソール・ログ・ファイル・最終回答に値を出しません。ブラウザーの画面遷移前にCDPイベントを購読します。
 5. Control UI の読み込みを確認し、タブを開いたままにします。Gateway も停止しません。
@@ -204,3 +208,4 @@ if ($LASTEXITCODE -gt 2) { throw 'Codex 認証状態を確認できませんで�
 - [OpenClaw v2026.9.6 install.ps1](https://github.com/openclaw/openclaw/blob/v2026.9.6/scripts/install.ps1) — Node.js のプロジェクト内配置に使う公式インストーラー
 - [OpenAI / Codex 認証手順（v2026.9.6）](https://github.com/openclaw/openclaw/blob/v2026.9.6/docs/providers/openai/setup.md)
 - [Dashboard CLI 手順（v2026.9.6）](https://github.com/openclaw/openclaw/blob/v2026.9.6/docs/cli/dashboard.md)
+```

@@ -4,14 +4,14 @@
 
 ## 社員ごとの配置
 
-| 社員 | 登録ID | 使用するAGENTS.md | 使用するSOUL.md | SOULの正本 |
-| --- | --- | --- | --- | --- |
-| マネージャー | `main` | `.openclaw/workspaces/main/AGENTS.md` | `.openclaw/workspaces/main/SOUL.md` | `ai-employees/employee-profiles/roles/manager/SOUL.md` |
+| 社員               | 登録ID      | 使用するAGENTS.md                          | 使用するSOUL.md                          | SOULの正本                                               |
+| ------------------ | ----------- | ------------------------------------------ | ---------------------------------------- | -------------------------------------------------------- |
+| マネージャー       | `main`      | `.openclaw/workspaces/main/AGENTS.md`      | `.openclaw/workspaces/main/SOUL.md`      | `ai-employees/employee-profiles/roles/manager/SOUL.md`   |
 | ソフトウェア設計者 | `architect` | `.openclaw/workspaces/architect/AGENTS.md` | `.openclaw/workspaces/architect/SOUL.md` | `ai-employees/employee-profiles/roles/architect/SOUL.md` |
-| UI/UXデザイナー | `designer` | `.openclaw/workspaces/designer/AGENTS.md` | `.openclaw/workspaces/designer/SOUL.md` | `ai-employees/employee-profiles/roles/designer/SOUL.md` |
-| Webアプリ開発者 | `engineer` | `.openclaw/workspaces/engineer/AGENTS.md` | `.openclaw/workspaces/engineer/SOUL.md` | `ai-employees/employee-profiles/roles/engineer/SOUL.md` |
-| レビュワー | `reviewer` | `.openclaw/workspaces/reviewer/AGENTS.md` | `.openclaw/workspaces/reviewer/SOUL.md` | `ai-employees/employee-profiles/roles/reviewer/SOUL.md` |
-| QA | `qa` | `.openclaw/workspaces/qa/AGENTS.md` | `.openclaw/workspaces/qa/SOUL.md` | `ai-employees/employee-profiles/roles/qa/SOUL.md` |
+| UI/UXデザイナー    | `designer`  | `.openclaw/workspaces/designer/AGENTS.md`  | `.openclaw/workspaces/designer/SOUL.md`  | `ai-employees/employee-profiles/roles/designer/SOUL.md`  |
+| Webアプリ開発者    | `engineer`  | `.openclaw/workspaces/engineer/AGENTS.md`  | `.openclaw/workspaces/engineer/SOUL.md`  | `ai-employees/employee-profiles/roles/engineer/SOUL.md`  |
+| レビュワー         | `reviewer`  | `.openclaw/workspaces/reviewer/AGENTS.md`  | `.openclaw/workspaces/reviewer/SOUL.md`  | `ai-employees/employee-profiles/roles/reviewer/SOUL.md`  |
+| QA                 | `qa`        | `.openclaw/workspaces/qa/AGENTS.md`        | `.openclaw/workspaces/qa/SOUL.md`        | `ai-employees/employee-profiles/roles/qa/SOUL.md`        |
 
 2026-09-28に確認し、6名のworkspaceにある `SOUL.md` は各役割SOULの正本と一致している。
 
@@ -37,13 +37,13 @@
 
 ## 参照先
 
-| 内容 | 参照先 |
-| --- | --- |
-| 社員登録とワークスペース | `.openclaw/openclaw.json` の `agents.entries` |
-| 共通Codex作業指示 | `.openclaw/workspaces/AGENTS.md` |
-| 社員別作業指示 | `.openclaw/workspaces/{agent-id}/AGENTS.md` |
-| 役割別SOULの正本 | `ai-employees/employee-profiles/roles/` |
-| OpenClawのワークスペース指示ファイル説明 | `.openclaw-runtime/cli/node_modules/openclaw/docs/concepts/agent-workspace.md` |
-| OpenClawのCodex実行フォルダーと指示ファイル | `.openclaw-runtime/cli/node_modules/openclaw/docs/concepts/system-prompt.md` |
-| Codex harnessのプロジェクト指示とスレッド | `.openclaw-runtime/cli/node_modules/openclaw/docs/plugins/codex-harness/configuration.md` |
-| `skipBootstrap` の説明 | `.openclaw-runtime/cli/node_modules/openclaw/docs/gateway/config-agents/workspace-and-bootstrap.md` |
+| 内容                                        | 参照先                                                                                              |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| 社員登録とワークスペース                    | `.openclaw/openclaw.json` の `agents.entries`                                                       |
+| 共通Codex作業指示                           | `.openclaw/workspaces/AGENTS.md`                                                                    |
+| 社員別作業指示                              | `.openclaw/workspaces/{agent-id}/AGENTS.md`                                                         |
+| 役割別SOULの正本                            | `ai-employees/employee-profiles/roles/`                                                             |
+| OpenClawのワークスペース指示ファイル説明    | `.openclaw-runtime/cli/node_modules/openclaw/docs/concepts/agent-workspace.md`                      |
+| OpenClawのCodex実行フォルダーと指示ファイル | `.openclaw-runtime/cli/node_modules/openclaw/docs/concepts/system-prompt.md`                        |
+| Codex harnessのプロジェクト指示とスレッド   | `.openclaw-runtime/cli/node_modules/openclaw/docs/plugins/codex-harness/configuration.md`           |
+| `skipBootstrap` の説明                      | `.openclaw-runtime/cli/node_modules/openclaw/docs/gateway/config-agents/workspace-and-bootstrap.md` |

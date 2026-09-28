@@ -487,10 +487,7 @@ Reviewerは問題を1件だけ返す形式にしない。
       "baseline_requirement_ids": ["BR-002"],
       "category": "DESIGN",
       "problem": "具体的な問題",
-      "evidence": [
-        "根拠1",
-        "根拠2"
-      ],
+      "evidence": ["根拠1", "根拠2"],
       "required_action": "必要な対応"
     },
     {

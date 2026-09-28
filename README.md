@@ -1,6 +1,8 @@
 # OpenClawでAI社員を試してみる
 
-OpenClawは、自分で管理する環境で動かし、チャットから仕事を頼めるAIアシスタントである。
+AI社員による業務自動化が流行っているようなので、実際に試してみることにした。
+AIが自走し、課題を自己解決しながら人のように振る舞う仕組みを検討したところ、複数のAIエージェント基盤があり、比較・検討した結果、OpenClawを採用する事にした。
+OpenClawを選んだ理由は、Agentが視覚的に表示されて状態を把握しやすいこと、各Agentへ個別に指示を出しやすいこと、Codexをサブスクリプション認証で利用できること、GitHubでの評価や利用規模が大きく、コミュニティも活発であること。
 
 ## 現在の構成
 
@@ -8,14 +10,14 @@ OpenClawは、自分で管理する環境で動かし、チャットから仕事
 
 この環境では、次の6名をOpenClawに登録し、それぞれ専用の作業ディレクトリ（workspace）と役割指示を設定している。
 
-| 役割 | 登録ID | 担当 |
-| --- | --- | --- |
-| Manager | `main` | 成果物を統合し、完了状況をまとめる |
-| ソフトウェア設計者 | `architect` | システム構成、API、データモデルなどを設計する |
-| UI/UXデザイナー | `designer` | 画面と利用者の操作フローを設計する |
-| Webアプリ開発者 | `engineer` | 方針に沿ってコードを変更する |
-| Reviewer | `reviewer` | 決められた完了条件に照らして方針と成果物をレビューする |
-| QA | `qa` | 受入条件に沿ってテストと動作確認を行う |
+| 役割               | 登録ID      | 担当                                                   |
+| ------------------ | ----------- | ------------------------------------------------------ |
+| Manager            | `main`      | 成果物を統合し、完了状況をまとめる                     |
+| ソフトウェア設計者 | `architect` | システム構成、API、データモデルなどを設計する          |
+| UI/UXデザイナー    | `designer`  | 画面と利用者の操作フローを設計する                     |
+| Webアプリ開発者    | `engineer`  | 方針に沿ってコードを変更する                           |
+| Reviewer           | `reviewer`  | 決められた完了条件に照らして方針と成果物をレビューする |
+| QA                 | `qa`        | 受入条件に沿ってテストと動作確認を行う                 |
 
 Managerはユーザーの依頼を作業単位に分け、ほかの5名へ担当を割り振る。
 
@@ -23,43 +25,9 @@ Managerはユーザーの依頼を作業単位に分け、ほかの5名へ担当
 
 ### Pythonでの作業進行とレビュー制御
 
-Python側には、1件ごとの依頼を管理する作業単位（Task）の状態を追い、レビューで指摘が出た場合に計画へ戻すコードがある。レビュー進行を制御するこの部分がReview Loop Coreだ。
+バックエンドにはPythonを使用しており、1件ごとの依頼をTask単位で管理しながら作業を進行する。基本の流れは、作業方針の提示、方針レビュー、実装、実装結果レビューの順で進む。
 
-Taskごとに完了判定の基準（Baseline Requirements）を定め、それに沿って進行とレビューを管理する。主な機能は次のとおり。
-
-- Baseline Requirementsの検証とTask状態遷移
-- Planと作業結果のレビュー、およびHIGH / MEDIUMの指摘後にPlanへ戻る制御
-- Reviewerの出力形式・confidence検証と、形式不正時の再試行
-- Task単位の排他制御と、実行時間・turn数・tool call数・変更ファイル数の上限
-
-計画を作り作業を進める実行役（Worker）と、計画や成果物を確認する審査役（Reviewer）の呼び出し仕様を定義している。単体テストではテスト用WorkerとReviewerを使う。OpenClawや、ターミナルからAIに指示を出すツール（Codex CLI）を実際に呼び出す処理はまだない。
-
-作業単位（Task）のDB保存、AI社員の状態確認・操作を行うAPIと画面（Control Plane）、AI社員の実行・観測に使うAgentScopeとの連携はPython実装に含まれない。Python実装はReview LoopとTask状態の制御コアまでだ。
-
-## Review Loop Core
-
-Taskごとに定めた完了判定の基準（Baseline Requirements）に沿ってレビューする。要件に違反しない一般改善、将来の要望、リファクタリングは指摘対象にしない。
-
-```text
-TASK_RECEIVED
-├─ Baseline Requirementsなし → HUMAN_REQUIRED
-├─ 前提Task未完了             → WAITING_DEPENDENCY
-└─ PLAN_DRAFT → PLAN_REVIEW
-                 ├─ HIGH / MEDIUM → PLAN_DRAFT
-                 │                  (再開上限に達したらHUMAN_REQUIRED)
-                 └─ それ以外 → EXECUTE → RESULT_REVIEW
-                                              ├─ HIGH / MEDIUM → PLAN_DRAFT
-                                              │                  (再開上限に達したらHUMAN_REQUIRED)
-                                              └─ 指摘なし / LOWのみ → COMPLETE
-```
-
-Reviewerの出力形式やconfidenceに問題があるときは、設定回数まで同じReviewerで再試行する。上限に達すると `HUMAN_REQUIRED` に移る。Workerの回復不能エラーや実行上限の超過でも停止する。上限の初期値は `ai-employees/app/core/limits.py` にある。状態遷移は `ai-employees/app/core/state_machine.py` で定義している。
-
-## OpenClawを使う理由
-
-OpenClawでは、AI社員ごとに実行主体（Agent）と作業領域（Workspace）を分け、会話の進行状態（Session）を管理できる。各社員が使う機能（Tool）を実行し、活動状況は標準の管理画面（Control UI）で確認する。AI社員の基盤を自作せず、役割と仕事の流れを試せる。
-
-セットアップ手順はOpenAI providerのCodex認証を使う設定を扱う。利用可能なモデルと利用量は契約内容とOpenClawの対応状況に従う。Ollamaは現在のセットアップ対象に含めていない。
+各レビューで合格しなかった場合は、再度作業方針の提示まで戻ってやり直す「Review Loop Core」を組み込んでいる。このレビュー制御が、最終的な成果物の完成度を大きく左右する。
 
 ## セットアップと操作
 
