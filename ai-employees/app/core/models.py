@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 from app.core.baseline import BaselineRequirement, ConcreteGoal
 
@@ -43,6 +43,8 @@ class AgentMetrics:
 
     turns: int = 1
     tool_calls: int = 0
+    session_id: str | None = None
+    cost_usd: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,3 +66,24 @@ class TaskResult:
     plan: Plan | None = None
     execution: ExecutionResult | None = None
     history: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class LoopEvent:
+    """Review Loopの状態変更とAgent応答を永続化するイベント。"""
+
+    event_type: str
+    state: str
+    reason: str | None
+    restart_count: int
+    history: tuple[str, ...]
+    plan: Plan | None = None
+    execution: ExecutionResult | None = None
+    review_target: str | None = None
+    review: object | None = None
+    agent_id: str | None = None
+    phase: str | None = None
+    metrics: AgentMetrics | None = None
+
+
+LoopEventHandler = Callable[[LoopEvent], None]  # LoopEventを同期保存するcallback

@@ -14,7 +14,7 @@ from app.core.baseline import (
 )
 from app.core.limits import LoopLimits, PhaseUsage
 from app.core.locks import TaskLockRegistry
-from app.core.models import ExecutionResult, Plan, Task, TaskResult
+from app.core.models import AgentResult, ExecutionResult, LoopEvent, LoopEventHandler, Plan, Task, TaskResult
 from app.core.review_models import (
     ReviewResult,
     ReviewSchemaError,
@@ -64,7 +64,11 @@ class ReviewLoopRunner:
         self.state_machine = state_machine or TaskStateMachine()
 
     async def run(
-        self, worker: WorkerAgent, reviewer: ReviewerAgent, task: Task
+        self,
+        worker: WorkerAgent,
+        reviewer: ReviewerAgent,
+        task: Task,
+        on_event: LoopEventHandler | None = None,
     ) -> TaskResult:
         """1 TaskのReview Loopを実行し、最終状態を返す。"""
         async with self.locks.hold(task.task_id):
@@ -72,6 +76,51 @@ class ReviewLoopRunner:
             current = TaskState.TASK_RECEIVED
             history = [current.value]
             restart_count = 0
+            plan: Plan | None = None
+            execution: ExecutionResult | None = None
+
+            def emit(
+                event_type: str,
+                *,
+                event_reason: str | None = None,
+                plan_value: Plan | None = None,
+                execution_value: ExecutionResult | None = None,
+                review_target: str | None = None,
+                review: ReviewResult | None = None,
+                agent_id: str | None = None,
+                phase: str | None = None,
+                metrics=None,
+            ) -> None:
+                """現在のLoop情報を永続化callbackへ渡す。"""
+                if on_event is None:
+                    return
+                on_event(
+                    LoopEvent(
+                        event_type=event_type,
+                        state=current.value,
+                        reason=event_reason,
+                        restart_count=restart_count,
+                        history=tuple(history),
+                        plan=plan_value if plan_value is not None else plan,
+                        execution=(
+                            execution_value
+                            if execution_value is not None
+                            else execution
+                        ),
+                        review_target=review_target,
+                        review=review,
+                        agent_id=agent_id,
+                        phase=phase,
+                        metrics=metrics,
+                    )
+                )
+
+            def transition(target: TaskState, reason: str | None = None) -> TaskState:
+                """状態遷移を適用し、変更後の履歴を通知する。"""
+                nonlocal current
+                current = self._transition(current, target, history)
+                emit("state_changed", event_reason=reason)
+                return current
 
             try:
                 requirements = task.baseline_requirements
@@ -79,35 +128,51 @@ class ReviewLoopRunner:
                     requirements = normalize_concrete_goal(task.concrete_goal)
                 requirements = validate_baseline_requirements(requirements)
             except BaselineValidationError:
-                current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                transition(TaskState.HUMAN_REQUIRED, "BASELINE_REQUIREMENTS_REQUIRED")
                 return self._task_result(
                     task, current, "BASELINE_REQUIREMENTS_REQUIRED", restart_count, history
                 )
 
             if not task.dependencies_complete:
-                current = self._transition(current, TaskState.WAITING_DEPENDENCY, history)
+                transition(TaskState.WAITING_DEPENDENCY, "DEPENDENCY_INCOMPLETE")
                 return self._task_result(
                     task, current, "DEPENDENCY_INCOMPLETE", restart_count, history
                 )
 
             active_task = replace(task, baseline_requirements=requirements)
-            current = self._transition(current, TaskState.PLAN_DRAFT, history)
+            transition(TaskState.PLAN_DRAFT)
             changed_files: set[str] = set()
-            plan: Plan | None = None
-            execution: ExecutionResult | None = None
 
             while True:
                 try:
                     plan = await self._run_worker_phase(
-                        lambda: worker.create_plan(active_task), task_started
+                        lambda: worker.create_plan(active_task),
+                        task_started,
+                        lambda response: emit(
+                            "agent_response",
+                            plan_value=response.value
+                            if isinstance(response.value, Plan)
+                            else None,
+                            agent_id=getattr(worker, "agent_id", "worker"),
+                            phase="PLAN",
+                            metrics=response.metrics,
+                        ),
                     )
                 except _PhaseLimitExceeded as error:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                    transition(TaskState.HUMAN_REQUIRED, error.reason)
                     return self._task_result(
                         active_task, current, error.reason, restart_count, history, plan, execution
                     )
-                except WorkerError:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                except WorkerError as error:
+                    if error.metrics is not None:
+                        emit(
+                            "agent_error",
+                            event_reason=str(error),
+                            agent_id=getattr(worker, "agent_id", "worker"),
+                            phase="PLAN",
+                            metrics=error.metrics,
+                        )
+                    transition(TaskState.HUMAN_REQUIRED, "UNRECOVERABLE_WORKER_ERROR")
                     return self._task_result(
                         active_task,
                         current,
@@ -118,7 +183,7 @@ class ReviewLoopRunner:
                         execution,
                     )
 
-                current = self._transition(current, TaskState.PLAN_REVIEW, history)
+                transition(TaskState.PLAN_REVIEW)
                 plan_review, retry_failure = await self._run_review_phase(
                     lambda prompt: reviewer.review_plan(
                         active_task, plan, prompt
@@ -126,9 +191,17 @@ class ReviewLoopRunner:
                     active_task,
                     "PLAN",
                     task_started,
+                    lambda response, review: emit(
+                        "agent_response",
+                        review_target="PLAN",
+                        review=review,
+                        agent_id=getattr(reviewer, "agent_id", "reviewer"),
+                        phase="PLAN_REVIEW",
+                        metrics=response.metrics,
+                    ),
                 )
                 if retry_failure is not None:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                    transition(TaskState.HUMAN_REQUIRED, retry_failure)
                     return self._task_result(
                         active_task,
                         current,
@@ -141,7 +214,7 @@ class ReviewLoopRunner:
 
                 if self._requires_restart(plan_review):
                     if restart_count >= self.limits.max_restart_count:
-                        current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                        transition(TaskState.HUMAN_REQUIRED, "MAX_RESTART_COUNT_EXCEEDED")
                         return self._task_result(
                             active_task,
                             current,
@@ -152,11 +225,9 @@ class ReviewLoopRunner:
                             execution,
                         )
                     restart_count += 1
-                    current = self._transition(current, TaskState.PLAN_DRAFT, history)
+                    transition(TaskState.PLAN_DRAFT)
                     if restart_count >= self.limits.max_restart_count:
-                        current = self._transition(
-                            current, TaskState.HUMAN_REQUIRED, history
-                        )
+                        transition(TaskState.HUMAN_REQUIRED, "MAX_RESTART_COUNT_EXCEEDED")
                         return self._task_result(
                             active_task,
                             current,
@@ -168,18 +239,36 @@ class ReviewLoopRunner:
                         )
                     continue
 
-                current = self._transition(current, TaskState.EXECUTE, history)
+                transition(TaskState.EXECUTE)
                 try:
                     execution = await self._run_worker_phase(
-                        lambda: worker.execute(active_task, plan), task_started
+                        lambda: worker.execute(active_task, plan),
+                        task_started,
+                        lambda response: emit(
+                            "agent_response",
+                            execution_value=response.value
+                            if isinstance(response.value, ExecutionResult)
+                            else None,
+                            agent_id=getattr(worker, "agent_id", "worker"),
+                            phase="EXECUTE",
+                            metrics=response.metrics,
+                        ),
                     )
                 except _PhaseLimitExceeded as error:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                    transition(TaskState.HUMAN_REQUIRED, error.reason)
                     return self._task_result(
                         active_task, current, error.reason, restart_count, history, plan, execution
                     )
-                except WorkerError:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                except WorkerError as error:
+                    if error.metrics is not None:
+                        emit(
+                            "agent_error",
+                            event_reason=str(error),
+                            agent_id=getattr(worker, "agent_id", "worker"),
+                            phase="EXECUTE",
+                            metrics=error.metrics,
+                        )
+                    transition(TaskState.HUMAN_REQUIRED, "UNRECOVERABLE_WORKER_ERROR")
                     return self._task_result(
                         active_task,
                         current,
@@ -192,7 +281,7 @@ class ReviewLoopRunner:
 
                 changed_files.update(execution.changed_files)
                 if len(changed_files) > self.limits.max_changed_files:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                    transition(TaskState.HUMAN_REQUIRED, "MAX_CHANGED_FILES_EXCEEDED")
                     return self._task_result(
                         active_task,
                         current,
@@ -203,7 +292,7 @@ class ReviewLoopRunner:
                         execution,
                     )
 
-                current = self._transition(current, TaskState.RESULT_REVIEW, history)
+                transition(TaskState.RESULT_REVIEW)
                 result_review, retry_failure = await self._run_review_phase(
                     lambda prompt: reviewer.review_result(
                         active_task, plan, execution, prompt
@@ -211,9 +300,17 @@ class ReviewLoopRunner:
                     active_task,
                     "RESULT",
                     task_started,
+                    lambda response, review: emit(
+                        "agent_response",
+                        review_target="RESULT",
+                        review=review,
+                        agent_id=getattr(reviewer, "agent_id", "reviewer"),
+                        phase="RESULT_REVIEW",
+                        metrics=response.metrics,
+                    ),
                 )
                 if retry_failure is not None:
-                    current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                    transition(TaskState.HUMAN_REQUIRED, retry_failure)
                     return self._task_result(
                         active_task,
                         current,
@@ -226,7 +323,7 @@ class ReviewLoopRunner:
 
                 if self._requires_restart(result_review):
                     if restart_count >= self.limits.max_restart_count:
-                        current = self._transition(current, TaskState.HUMAN_REQUIRED, history)
+                        transition(TaskState.HUMAN_REQUIRED, "MAX_RESTART_COUNT_EXCEEDED")
                         return self._task_result(
                             active_task,
                             current,
@@ -237,11 +334,9 @@ class ReviewLoopRunner:
                             execution,
                         )
                     restart_count += 1
-                    current = self._transition(current, TaskState.PLAN_DRAFT, history)
+                    transition(TaskState.PLAN_DRAFT)
                     if restart_count >= self.limits.max_restart_count:
-                        current = self._transition(
-                            current, TaskState.HUMAN_REQUIRED, history
-                        )
+                        transition(TaskState.HUMAN_REQUIRED, "MAX_RESTART_COUNT_EXCEEDED")
                         return self._task_result(
                             active_task,
                             current,
@@ -253,18 +348,28 @@ class ReviewLoopRunner:
                         )
                     continue
 
-                current = self._transition(current, TaskState.COMPLETE, history)
+                transition(TaskState.COMPLETE)
                 return self._task_result(
                     active_task, current, None, restart_count, history, plan, execution
                 )
 
-    async def _run_worker_phase(self, call, task_started: float) -> object:
+    async def _run_worker_phase(
+        self, call, task_started: float, on_response=None
+    ) -> object:
         """Worker呼び出しをPhase予算内で実行する。"""
         usage = PhaseUsage()
-        return await self._invoke(usage, call, task_started)
+        response = await self._invoke(
+            usage, call, task_started, on_response=on_response
+        )
+        return response.value
 
     async def _run_review_phase(
-        self, call, task: Task, target: str, task_started: float
+        self,
+        call,
+        task: Task,
+        target: str,
+        task_started: float,
+        on_response=None,
     ) -> tuple[ReviewResult | None, str | None]:
         """Schemaまたはconfidence異常だけを同じReviewerでretryする。"""
         usage = PhaseUsage()
@@ -272,9 +377,17 @@ class ReviewLoopRunner:
         baseline_ids = {item.requirement_id for item in task.baseline_requirements}
         for attempt in range(self.limits.max_review_retries + 1):
             try:
-                review: ReviewResult = await self._invoke(
-                    usage, lambda: call(prompt), task_started
+                response: AgentResult[ReviewResult] = await self._invoke(
+                    usage,
+                    lambda: call(prompt),
+                    task_started,
+                    on_response=(
+                        lambda response: on_response(response, response.value)
+                    )
+                    if on_response is not None
+                    else None,
                 )
+                review = response.value
                 validate_review_result(
                     review, baseline_ids, self.limits.confidence_threshold
                 )
@@ -282,11 +395,19 @@ class ReviewLoopRunner:
             except _PhaseLimitExceeded as error:
                 return None, error.reason
             except (ReviewerError, ReviewSchemaError) as error:
+                if (
+                    isinstance(error, ReviewerError)
+                    and error.metrics is not None
+                    and on_response is not None
+                ):
+                    on_response(AgentResult(None, error.metrics), None)
                 if attempt == self.limits.max_review_retries:
                     return None, "MAX_REVIEW_RETRIES_EXCEEDED"
         return None, "MAX_REVIEW_RETRIES_EXCEEDED"
 
-    async def _invoke(self, usage: PhaseUsage, call, task_started: float):
+    async def _invoke(
+        self, usage: PhaseUsage, call, task_started: float, on_response=None
+    ):
         """Agent呼び出しをTask全体の時間とPhaseのturn/tool上限で囲む。"""
         task_limit_seconds = self.limits.max_execution_minutes * 60
         remaining = task_limit_seconds - (time.monotonic() - task_started)
@@ -297,6 +418,8 @@ class ReviewLoopRunner:
         except asyncio.TimeoutError as error:
             raise _PhaseLimitExceeded("MAX_EXECUTION_TIME_EXCEEDED") from error
 
+        if on_response is not None:
+            on_response(response)
         metrics = response.metrics
         if metrics.turns < 0 or metrics.tool_calls < 0:
             raise _PhaseLimitExceeded("INVALID_AGENT_METRICS")
@@ -304,7 +427,7 @@ class ReviewLoopRunner:
         reason = usage.exceeded(self.limits)
         if reason is not None:
             raise _PhaseLimitExceeded(reason)
-        return response.value
+        return response
 
     @staticmethod
     def _requires_restart(review: ReviewResult | None) -> bool:

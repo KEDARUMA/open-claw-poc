@@ -29,6 +29,8 @@ Managerはユーザーの依頼を作業単位に分け、ほかの5名へ担当
 
 各レビューで合格しなかった場合は、再度作業方針の提示まで戻ってやり直す「Review Loop Core」を組み込んでいる。このレビュー制御が、最終的な成果物の完成度を大きく左右する。
 
+Task登録、AI社員の実行、状態とレビュー履歴の保存を行うRLC APIの起動方法は [Review Loop Coreの起動とAPI](docs/RLC_起動とAPI.md) を参照する。
+
 ## セットアップと操作
 
 OpenClawの導入、認証、GatewayとControl UIの起動手順は [OpenClawセットアップ手順](docs/openclaw-setup.md) に記載した。セットアップ後は、次のスクリプトでGatewayを操作する。
